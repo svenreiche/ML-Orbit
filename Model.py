@@ -33,7 +33,7 @@ class Model:
         for i in range(5):
             self.ydata[:, i] *= scale[i]
         self.xdata = np.transpose(np.matmul(self.r,np.transpose(self.ydata)))
-
+        self.xdata+=np.random.normal(0,0.001,size=self.xdata.shape)
 
     def updateModelFromMachine(self):
         self.MI.updateIDs(self.SF)
@@ -59,6 +59,10 @@ class Model:
         self.r4 = np.concatenate((res[:, 4], res[:, 9]))
         self.r5 = np.concatenate((res[:, 5], res[:, 10]))
         self.r = np.column_stack((self.r1, self.r2, self.r3, self.r4, self.r5))
+        plt.plot(self.s,res[:,5])
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$R_{16}$')
+        plt.show()
         print('R-Matrix derived')
         tempdir.cleanup()
 

@@ -33,7 +33,7 @@ class MLOrbit:
         model.compile(optimizer='adam',
                       loss="mean_squared_error",
                       metrics=['accuracy'])
-        model.fit(x_train, y_train, epochs=10)
+        model.fit(x_train, y_train, epochs=5)
         model.evaluate(x_test,  y_test, verbose=2)
         model.summary()
         y_predict=model.predict(x_test)
@@ -41,10 +41,28 @@ class MLOrbit:
         plt.xlabel('Input Energy Jitter')
         plt.ylabel('Reconstructed Energy Jitter')
         plt.show()
-        plt.scatter(y_test[:,4],x_test[:,5],s=0.5)
+        plt.scatter(y_test[:, 4], x_test[:, 4], s=0.5)
         plt.xlabel('Input Energy Jitter')
         plt.ylabel('Reading of first BPM in SARCL02')
         plt.show()
+
+        n=len(self.data.s)
+        plt.plot(self.data.s,x_test[0,0:n])
+        plt.plot(self.data.s,x_test[1,0:n])
+        plt.plot(self.data.s,x_test[2,0:n])
+        plt.plot(self.data.s,x_test[3,0:n])
+        plt.plot(self.data.s,x_test[4,0:n])
+        plt.plot(self.data.s,x_test[5,0:n])
+        plt.plot(self.data.s,x_test[6,0:n])
+        plt.plot(self.data.s,x_test[7,0:n])
+        plt.plot(self.data.s,x_test[8,0:n])
+        plt.plot(self.data.s,x_test[9,0:n])
+
+        plt.xlabel('s (m)')
+        plt.ylabel('orbit')
+        plt.title('5 Sample Orbits')
+        plt.show()
+
 
 
 
