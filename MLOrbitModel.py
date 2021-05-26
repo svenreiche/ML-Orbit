@@ -4,21 +4,15 @@ from os import chdir, system
 # search path for online model
 sys.path.append('/sf/bd/applications/OnlineModel/current')
 
-import matplotlib.pyplot as plt
 import numpy as np
-
 import OMMadxLat
 import OMFacility
-import OMMachineInterface
 
-class Model:
+
+class OrbitModel:
     def __init__(self):
-
-        #initialize the model
+        # initialize the model
         self.SF = OMFacility.Facility()
-        self.SF.forceEnergyAt('SARCL02.MBND100', 3e9)
-        self.MI = OMMachineInterface.MachineInterface()
-        self.SF.writeFacility(self.MI)   # register the epics channels
         self.Madx = OMMadxLat.OMMadXLattice()
         # define the beamline section
         sec = self.SF.getSection('SARBD02')
@@ -27,53 +21,71 @@ class Model:
         self.line.setRange('SARCL01', 'SARBD01')
 
 
-
-    def prepareData(self,Nsam,scale=[1,1,1,1,1]):
+    def generateTrainingsData(self, Nsam, scale=[0.02, 0.002, 0.02, 0.002, 0.1, 0.001]):
         self.ydata = np.random.normal(0, 1, size=(Nsam, 5))
         for i in range(5):
             self.ydata[:, i] *= scale[i]
-        self.xdata = np.transpose(np.matmul(self.r,np.transpose(self.ydata)))
-        self.xdata+=np.random.normal(0,0.001,size=self.xdata.shape)
+        self.xdata = np.transpose(np.matmul(self.r, np.transpose(self.ydata)))
+        self.xdata += np.random.normal(0, scale[5], size=self.xdata.shape)
 
-    def updateModelFromMachine(self):
-        self.MI.updateIDs(self.SF)
-        self.MI.updateMagnets(self.SF)
+        nx=self.r.shape[0]
+        ny=self.r.shape[1]
+        fluc=np.zeros((nx,ny))
+        for i in range(nx):
+            for j in range(5):
+                fluc[i,j]=np.std(self.r[i,j]*self.ydata[:,j])
+        return fluc
 
-    def trackModel(self, variables={}):
-        self.writeLattice()
-        for var in variables.keys():
-            self.Madx.write('%s := %s;\n' % (var, variables[var]))
-        self.writeLatticeTracking()
-        tempdir = tempfile.TemporaryDirectory()
-        with open(tempdir.name + '/tmp-lattice.madx', 'w') as f:
+    def updateModel(self, maglist, energy):
+        for key in maglist.keys():
+            name = key.replace('-','.')
+            ele = self.SF.getElement(name)
+            val = maglist[key]
+            if '.MQ' in name:
+                ele.k1 = val/ele.Length
+                print(ele.Name,ele.k1)
+        self.SF.forceEnergyAt('SARCL02.MBND100', energy*1e6)
+        self.trackModel(energy)
+
+    def trackModel(self, energy):
+        self.writeLattice(energy)
+#        tempdir = tempfile.TemporaryDirectory()
+        tempdir='.'
+        with open(tempdir + '/tmp-lattice.madx', 'w') as f:
             for line in self.Madx.cc:
                 f.write(line)
         print('Tracking with MadX...')
-        chdir(tempdir.name)
+#        chdir(tempdir.name)
         system('madx tmp-lattice.madx')
-        res, name = self.parseOutput(tempdir.name)
+        res, self.name = self.parseOutput(tempdir)
         self.s = res[:, 0]
-        self.r1 = np.concatenate((res[:, 1], res[:, 6]))
-        self.r2 = np.concatenate((res[:, 2], res[:, 7]))
-        self.r3 = np.concatenate((res[:, 3], res[:, 8]))
-        self.r4 = np.concatenate((res[:, 4], res[:, 9]))
-        self.r5 = np.concatenate((res[:, 5], res[:, 10]))
-        self.r = np.column_stack((self.r1, self.r2, self.r3, self.r4, self.r5))
-        plt.plot(self.s,res[:,5])
-        plt.xlabel('s (m)')
-        plt.ylabel(r'$R_{16}$')
-        plt.show()
+        self.rx1 = res[:, 1]
+        self.rx2 = res[:, 2]
+        self.rx3 = res[:, 3]
+        self.rx4 = res[:, 4]
+        self.rx5 = res[:, 5]
+        self.ry1 = res[:, 6]
+        self.ry2 = res[:, 7]
+        self.ry3 = res[:, 8]
+        self.ry4 = res[:, 9]
+        self.ry5 = res[:, 10]
+        r1 = np.concatenate((res[:, 1], res[:, 6]))
+        r2 = np.concatenate((res[:, 2], res[:, 7]))
+        r3 = np.concatenate((res[:, 3], res[:, 8]))
+        r4 = np.concatenate((res[:, 4], res[:, 9]))
+        r5 = np.concatenate((res[:, 5], res[:, 10]))
+        self.r = np.transpose(np.stack([r1, r2, r3, r4, r5]))
         print('R-Matrix derived')
-        tempdir.cleanup()
+#        tempdir.cleanup()
 
-    def writeLattice(self):
+    def writeLattice(self, energy):
         self.Madx.clear()
         self.Madx.write('option,-echo;\n')
         self.Madx.write('betax0=30;\n')
         self.Madx.write('betay0=30;\n')
         self.Madx.write('alphax0=0;\n')
         self.Madx.write('alphay0=0;\n\n')
-        self.Madx.write('beam, particle=electron,energy=3000,sigt=1e-3,sige=1e-4;\n\n')
+        self.Madx.write('beam, particle=electron,energy=%f,sigt=1e-3,sige=1e-4;\n\n' % energy)
 
         self.SF.setRegExpElement('S20SY02', 'MK.C0.0', 'cory', 0)
         self.SF.setRegExpElement('S20SY02', 'MBND', 'angle', 0)
@@ -89,6 +101,8 @@ class Model:
         self.Madx.write('plot, haxis = s, vaxis = re31, re32, re13,re14, range =  #s/#e,colour=100;\n')
         self.Madx.write('plot, haxis = s, vaxis = re16, re36, range =  #s/#e,colour=100;\n')
         self.Madx.write('exit;')
+
+
 
     def parseOutput(self, path):
 
@@ -114,21 +128,4 @@ class Model:
                         name.append(val[0][1:-1])
         return np.array(res),name
 
-    def plotRMatrix(self,res):
-        plt.plot(res[:, 0], res[:, 1], label=r'$R_{11}$')
-        plt.plot(res[:, 0], res[:, 2], label=r'$R_{12}$')
-        plt.plot(res[:, 0], res[:, 8], label=r'$R_{33}$')
-        plt.plot(res[:, 0], res[:, 9], label=r'$R_{34}$')
-        plt.legend()
-        plt.show()
-        plt.plot(res[:, 0], res[:, 3], label=r'$R_{13}$')
-        plt.plot(res[:, 0], res[:, 4], label=r'$R_{14}$')
-        plt.plot(res[:, 0], res[:, 6], label=r'$R_{31}$')
-        plt.plot(res[:, 0], res[:, 7], label=r'$R_{32}$')
-        plt.legend()
-        plt.show()
-        plt.plot(res[:, 0], res[:, 5], label=r'$R_{16}$')
-        plt.plot(res[:, 0], res[:, 10], label=r'$R_{36}$')
 
-        plt.legend()
-        plt.show()
