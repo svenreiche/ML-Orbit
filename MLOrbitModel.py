@@ -1,4 +1,5 @@
 import sys
+
 import tempfile
 from os import chdir, system
 # search path for online model
@@ -28,14 +29,6 @@ class OrbitModel:
         self.xdata = np.transpose(np.matmul(self.r, np.transpose(self.ydata)))
         self.xdata += np.random.normal(0, scale[5], size=self.xdata.shape)
 
-        nx=self.r.shape[0]
-        ny=self.r.shape[1]
-        fluc=np.zeros((nx,ny))
-        for i in range(nx):
-            for j in range(5):
-                fluc[i,j]=np.std(self.r[i,j]*self.ydata[:,j])
-        return fluc
-
     def updateModel(self, maglist, energy):
         for key in maglist.keys():
             name = key.replace('-','.')
@@ -49,15 +42,16 @@ class OrbitModel:
 
     def trackModel(self, energy):
         self.writeLattice(energy)
-#        tempdir = tempfile.TemporaryDirectory()
-        tempdir='.'
-        with open(tempdir + '/tmp-lattice.madx', 'w') as f:
+        self.writeLatticeTracking()
+        tempdir = tempfile.TemporaryDirectory()
+#        tempdir='.'
+        with open(tempdir.name + '/tmp-lattice.madx', 'w') as f:
             for line in self.Madx.cc:
                 f.write(line)
         print('Tracking with MadX...')
-#        chdir(tempdir.name)
+        chdir(tempdir.name)
         system('madx tmp-lattice.madx')
-        res, self.name = self.parseOutput(tempdir)
+        res, self.name = self.parseOutput(tempdir.name)
         self.s = res[:, 0]
         self.rx1 = res[:, 1]
         self.rx2 = res[:, 2]
@@ -76,7 +70,7 @@ class OrbitModel:
         r5 = np.concatenate((res[:, 5], res[:, 10]))
         self.r = np.transpose(np.stack([r1, r2, r3, r4, r5]))
         print('R-Matrix derived')
-#        tempdir.cleanup()
+        tempdir.cleanup()
 
     def writeLattice(self, energy):
         self.Madx.clear()

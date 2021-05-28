@@ -1,0 +1,475 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1212</width>
+    <height>897</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QPushButton" name="UIOpenFile">
+        <property name="text">
+         <string>Load Machinde Data and Settings</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line_4">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="UITrainModel">
+        <property name="text">
+         <string>Train Model</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Epochs</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="UITrainEpochs">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>5</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Samples</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="UITrainSamples">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="text">
+         <string>100000</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QGridLayout" name="gridLayout">
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>Orbit X (micron)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="UIOrbitX">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>2</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLineEdit" name="UIAngleX">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>0.2</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_4">
+          <property name="text">
+           <string>Angle X (microrad)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_7">
+          <property name="text">
+           <string>Orbit Y (micron)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="1">
+         <widget class="QLineEdit" name="UIEnergy">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>0.1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0">
+         <widget class="QLabel" name="label_5">
+          <property name="text">
+           <string>Energy (0.1%)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="label_8">
+          <property name="text">
+           <string>Angle Y (microrad)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLineEdit" name="UIOrbitY">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>2</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QLineEdit" name="UIAngleY">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>0.2</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="0">
+         <widget class="QLabel" name="label_6">
+          <property name="text">
+           <string>BPM Res. (micron)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="1">
+         <widget class="QLineEdit" name="UIBPM">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>1</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="Line" name="line_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line_3">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="UILoadData">
+        <property name="text">
+         <string>Read Machine Data</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="UICheckTraining">
+        <property name="text">
+         <string>Check with Model</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="verticalSpacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QFrame" name="mplwindow">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <layout class="QVBoxLayout" name="mplvl"/>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1212</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuPlot">
+    <property name="title">
+     <string>Plot</string>
+    </property>
+    <widget class="QMenu" name="menuR_Matrix">
+     <property name="title">
+      <string>R-Matrix</string>
+     </property>
+     <addaction name="actionR11"/>
+     <addaction name="actionR12"/>
+     <addaction name="actionR16"/>
+    </widget>
+    <widget class="QMenu" name="menuMachine_Data">
+     <property name="title">
+      <string>Machine Data</string>
+     </property>
+     <widget class="QMenu" name="menuPrediction_3">
+      <property name="title">
+       <string>Prediction</string>
+      </property>
+      <addaction name="actionPredX"/>
+      <addaction name="actionPRedXP"/>
+      <addaction name="actionPredY"/>
+      <addaction name="actionPredYP"/>
+      <addaction name="actionPredEnergy"/>
+     </widget>
+     <addaction name="actionOrbitRMSMachine"/>
+     <addaction name="menuPrediction_3"/>
+    </widget>
+    <widget class="QMenu" name="menuGenerated_Data">
+     <property name="title">
+      <string>Generated Data</string>
+     </property>
+     <widget class="QMenu" name="menuPrediction_2">
+      <property name="title">
+       <string>Validation</string>
+      </property>
+      <addaction name="actionValidX"/>
+      <addaction name="actionValidXP"/>
+      <addaction name="actionValidY"/>
+      <addaction name="actionValidYP"/>
+      <addaction name="actionValidEnergy"/>
+     </widget>
+     <addaction name="actionOrbitRMSModel"/>
+     <addaction name="menuPrediction_2"/>
+    </widget>
+    <widget class="QMenu" name="menuTensorFlow_Model">
+     <property name="title">
+      <string>TensorFlow Model</string>
+     </property>
+     <addaction name="actionLoss"/>
+     <addaction name="actionAccuracy"/>
+    </widget>
+    <addaction name="menuR_Matrix"/>
+    <addaction name="menuMachine_Data"/>
+    <addaction name="menuGenerated_Data"/>
+    <addaction name="menuTensorFlow_Model"/>
+   </widget>
+   <addaction name="menuPlot"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionR11">
+   <property name="text">
+    <string>R11, R33</string>
+   </property>
+  </action>
+  <action name="actionR12">
+   <property name="text">
+    <string>R12, R34</string>
+   </property>
+  </action>
+  <action name="actionR16">
+   <property name="text">
+    <string>R16, R36</string>
+   </property>
+  </action>
+  <action name="actionR13_R31">
+   <property name="text">
+    <string>R13, R31</string>
+   </property>
+  </action>
+  <action name="actionOrbitRMSMachine">
+   <property name="text">
+    <string>Orbit Fluctuation </string>
+   </property>
+  </action>
+  <action name="actionOrbitRMSModel">
+   <property name="text">
+    <string>OrbitFluctuation</string>
+   </property>
+  </action>
+  <action name="actionLoss">
+   <property name="text">
+    <string>Loss-Function</string>
+   </property>
+  </action>
+  <action name="actionAccuracy">
+   <property name="text">
+    <string>Accuracy</string>
+   </property>
+  </action>
+  <action name="actionPrediction_XP">
+   <property name="text">
+    <string>Prediction - XP</string>
+   </property>
+  </action>
+  <action name="actionPrediction_Y">
+   <property name="text">
+    <string>Prediction - Y</string>
+   </property>
+  </action>
+  <action name="actionX">
+   <property name="text">
+    <string>X</string>
+   </property>
+  </action>
+  <action name="actionXP">
+   <property name="text">
+    <string>XP</string>
+   </property>
+  </action>
+  <action name="actionY">
+   <property name="text">
+    <string>Y</string>
+   </property>
+  </action>
+  <action name="actionYP">
+   <property name="text">
+    <string>YP</string>
+   </property>
+  </action>
+  <action name="actionEnergy">
+   <property name="text">
+    <string>Energy</string>
+   </property>
+  </action>
+  <action name="actionValidX">
+   <property name="text">
+    <string>X</string>
+   </property>
+  </action>
+  <action name="actionValidXP">
+   <property name="text">
+    <string>XP</string>
+   </property>
+  </action>
+  <action name="actionValidY">
+   <property name="text">
+    <string>Y</string>
+   </property>
+  </action>
+  <action name="actionValidYP">
+   <property name="text">
+    <string>YP</string>
+   </property>
+  </action>
+  <action name="actionValidEnergy">
+   <property name="text">
+    <string>Energy</string>
+   </property>
+  </action>
+  <action name="actionPredX">
+   <property name="text">
+    <string>X</string>
+   </property>
+  </action>
+  <action name="actionPRedXP">
+   <property name="text">
+    <string>XP</string>
+   </property>
+  </action>
+  <action name="actionPredY">
+   <property name="text">
+    <string>Y</string>
+   </property>
+  </action>
+  <action name="actionPredYP">
+   <property name="text">
+    <string>YP</string>
+   </property>
+  </action>
+  <action name="actionPredEnergy">
+   <property name="text">
+    <string>Energy</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

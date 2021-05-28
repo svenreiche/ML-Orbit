@@ -1,4 +1,5 @@
 import h5py
+import numpy as np
 
 class OrbitData:
     def __init__(self):
@@ -26,15 +27,34 @@ class OrbitData:
         self.energy = self.file['Epics']['SARCL02-MBND100:ENERGY-OP'][()]
 
 
-    def getBPMs(self):
+    def getBPM(self,names):
         if self.file is None:
             return
-        bpms=[]
-        for key in self.file['BeamSynch'].keys():
-            name = key.split(':')[0]
-            if not name in bpms:
-                bpms.append(name)
+        ny = len(names)
+        nx = -1
+        refx = None
+        refy = None
 
-        print(bpms)
+        for iy, name in enumerate(names):
+            PV = name+':X1'
+            if PV in self.file['BeamSynch'].keys():
+                dset = self.file['BeamSynch'][PV][()]
+                if nx < 0:
+                    nx = len(dset)
+                    self.data = np.zeros((nx, 2*ny))
+                self.data[:, iy] = dset
+            else:
+                print('Missing Dataset for', PV)
+            PV = name + ':Y1'
+            if PV in self.file['BeamSynch'].keys():
+                dset = self.file['BeamSynch'][PV][()]
+                self.data[:, iy+ny] = dset
+            else:
+                print('Missing Dataset for', PV)
+
+            self.data[:,:] -= self.data[0,:]
+
+
+
 
 

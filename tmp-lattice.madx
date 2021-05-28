@@ -1340,3 +1340,10 @@ SWISSFEL: SEQUENCE, REFER=centre, L=163.3883265377;
    SARBD01, AT=161.1575137625;
 ENDSEQUENCE;
 
+use, sequence=swissfel;
+select, flag=twiss, column=NAME,S,RE11,RE12,RE13,RE14,RE16,RE31,RE32,RE33,RE34,RE36;
+twiss, range=#s/#e,rmatrix, sequence=swissfel,betx=betax0,bety=betay0,alfx=alphax0,alfy=alphay0,file="twiss.dat";
+plot, haxis = s, vaxis = re11, re12, re33,re34, range =  #s/#e,colour=100;
+plot, haxis = s, vaxis = re31, re32, re13,re14, range =  #s/#e,colour=100;
+plot, haxis = s, vaxis = re16, re36, range =  #s/#e,colour=100;
+exit;

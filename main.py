@@ -35,17 +35,105 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         self.model = MLOrbitModel.OrbitModel() # interface to Madx to generate R-MAtrix and sampel orbits
         self.train = MLOrbitTrainer.Trainer()  # all Tensorflow stuff
 
-        self.hasLoaded = False
+# flags
         self.hasModel = False
-        self.hasData = False
+        self.hasTraining = False
 # event
-        self.UILoadData.clicked.connect(self.LoadData)
-        self.UIGenerateModel.clicked.connect(self.GenerateModel)
-        self.UIGenerateTraining.clicked.connect(self.GenerateTraining)
+        self.UIOpenFile.clicked.connect(self.OpenFile)
         self.UITrainModel.clicked.connect(self.TrainModel)
+# plotting
+        self.actionR11.triggered.connect(self.PlotR)
+        self.actionR12.triggered.connect(self.PlotR)
+        self.actionR16.triggered.connect(self.PlotR)
+        self.actionOrbitRMSMachine.triggered.connect(self.PlotRMS)
+        self.actionOrbitRMSModel.triggered.connect(self.PlotRMS)
 
+    #        self.UIGenerateModel.clicked.connect(self.GenerateModel)
+#        self.UIGenerateTraining.clicked.connect(self.GenerateTraining)
+#        self.UILoadData.clicked.connect(self.LoadData)
+#        self.UICheckTraining.clicked.connect(self.CheckData)
 
     def TrainModel(self):
+        if not self.hasModel:
+            self.OpenFile()
+        if not self.hasModel:
+                return
+
+        nsam = int(str(self.UITrainSamples.text()))
+        errorbx = float(str(self.UIOrbitX.text())) * 1e-3
+        errangx = float(str(self.UIAngleX.text())) * 1e-3
+        errorby = float(str(self.UIOrbitY.text())) * 1e-3
+        errangy = float(str(self.UIAngleY.text())) * 1e-3
+        errerg = float(str(self.UIEnergy.text()))
+        errbpm = float(str(self.UIBPM.text())) * 1e-3
+        # generate a training set
+        self.model.generateTrainingsData(nsam, [errorbx, errangx, errorby, errangy, errerg, errbpm])
+        nepoch = int(str(self.UITrainEpochs.text()))
+        n = int(self.model.xdata.shape[0]*0.75)  # 75 percent are training and rest testing
+        # run tf.keras
+        self.train.runTF(self.model.xdata[0:n, :],
+                        self.model.ydata[0:n, :],
+                        self.model.xdata[n:, :],
+                        self.model.ydata[n:, :], nepoch)
+        self.hasTraining = True
+
+    def OpenFile(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getOpenFileName(self, "DataMiner File",
+                                                  "/sf/data/applications/BD-DataMiner/AramisOrbit/data",
+                                                  "HDF5 Files (*.h5)", options=options)
+        if fileName is None:
+            return
+        self.data.open(fileName)
+        self.hasFile = True
+        # generate madx model from machine settings in file
+        self.model.updateModel(self.data.mag, self.data.energy)
+        # prepare data from the machine
+        bpm = [name.split('.MARK')[0].replace('.','-') for name in self.model.name]
+        self.data.getBPM(bpm)
+        self.hasModel = True
+
+#------------------------------
+
+    def CheckData(self):
+        if not self.hasMachineData:
+            self.LoadData()
+        if not self.hasTraining:
+            self.TrainModel()
+
+        pred = self.train.predict(self.data.data)
+        rms = np.std(pred[:, 0])*1e3
+        self.UIOrbitX.setText('%f' % rms)
+        rms = np.std(pred[:, 1])*1e3
+        self.UIAngleX.setText('%f' % rms)
+        rms = np.std(pred[:, 2])*1e3
+        self.UIOrbitY.setText('%f' % rms)
+        rms = np.std(pred[:, 3])*1e3
+        self.UIAngleY.setText('%f' % rms)
+        rms = np.std(pred[:, 4])
+        self.UIEnergy.setText('%f' % rms)
+
+        n=int(self.data.data.shape[1]/2)
+        datacor=self.data.data-np.transpose(np.matmul(self.model.r,np.transpose(pred)))
+
+
+        self.axes1.clear()
+        self.axes1.plot(self.model.s, np.std(self.data.data[:, 0:n], axis=0))
+        self.axes1.plot(self.model.s, np.std(self.data.data[:, n:], axis=0))
+
+        self.axes2.clear()
+        self.axes2.plot(self.model.s, np.std(datacor[:, 0:n], axis=0))
+        self.axes2.plot(self.model.s, np.std(datacor[:, n:], axis=0))
+
+        self.axes3.clear()
+        self.axes4.clear()
+        self.canvas.draw()
+
+
+
+
+    def TrainModelOld(self):
         if not self.hasData:
             self.GenerateTraining()
 
@@ -56,9 +144,9 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         x_test = self.model.xdata[n:, :]
         y_test = self.model.ydata[n:, :]
 
-        y_predict, loss, acc, val_loss, val_acc=self.train.runTF(x_train, y_train, x_test, y_test, nepoch)
-        ep =np.linspace(1,nepoch,num=nepoch)
-
+        y_predict, loss, acc, val_loss, val_acc = self.train.runTF(x_train, y_train, x_test, y_test, nepoch)
+        ep = np.linspace(1, nepoch, num=nepoch)
+        self.hasTraining = True
         self.axes1.clear()
         self.axes1.plot(ep,loss,label=r'Training Set')
         self.axes1.plot(ep,val_loss,label=r'Test Set')
@@ -92,11 +180,13 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
             self.GenerateModel()
 
         nsam = int(str(self.UITrainSamples.text()))
-        errorb = float(str(self.UIOrbit.text()))*1e-3
-        errang = float(str(self.UIAngle.text()))*1e-3
+        errorbx = float(str(self.UIOrbitX.text()))*1e-3
+        errangx = float(str(self.UIAngleX.text()))*1e-3
+        errorby = float(str(self.UIOrbitY.text()))*1e-3
+        errangy = float(str(self.UIAngleY.text()))*1e-3
         errerg = float(str(self.UIEnergy.text()))
         errbpm = float(str(self.UIBPM.text()))*1e-3
-        fluc=self.model.generateTrainingsData(nsam,[errorb,errang,errorb,errang,errerg,errbpm])
+        fluc=self.model.generateTrainingsData(nsam,[errorbx,errangx,errorby,errangy,errerg,errbpm])
         self.hasData = True
         nx=int(fluc.shape[0]/2)
 
@@ -124,47 +214,64 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
 
         self.canvas.draw()
 
-    def GenerateModel(self):
-        if not self.hasLoaded:
-            self.LoadData()
-        self.model.updateModel(self.data.mag, self.data.energy)
-        self.hasModel = True
-        self.axes1.clear()
-        self.axes1.plot(self.model.s, self.model.rx1,label=r'$R_{11}$')
-        self.axes1.plot(self.model.s, self.model.rx2, label=r'$R_{12}$')
-        self.axes1.legend()
 
-        self.axes2.clear()
-        self.axes2.plot(self.model.s, self.model.ry3, label=r'$R_{33}$')
-        self.axes2.plot(self.model.s, self.model.ry4, label=r'$R_{34}$')
-        self.axes2.legend()
-
-        self.axes3.clear()
-        self.axes3.plot(self.model.s, self.model.rx5, label=r'$R_{16}$')
-        self.axes3.plot(self.model.s, self.model.ry5, label=r'$R_{36}$')
-        self.axes3.legend()
-
-        self.axes4.clear()
+# plotting routine
+    def PlotRMS(self):
+        if not self.hasModel:
+            return
+        name = str(self.sender().objectName())
+        x = self.model.s
+        nx = len(x)
+        if 'Machine' in name:
+            y1 = np.std(self.data.data[:, 0:nx], axis=0)
+            y2 = np.std(self.data.data[:, nx:], axis=0)
+        if 'Model' in name:
+            if not self.hasTraining:
+                return
+            y1 = np.std(self.model.xdata[:, 0:nx], axis=0)
+            y2 = np.std(self.model.xdata[:, nx:], axis=0)
+        self.axes.clear()
+        self.axes.plot(x, y1, label=r'X')
+        self.axes.plot(x, y2, label=r'Y')
+        self.axes.set_xlabel(r'$s$ (m)')
+        self.axes.set_ylabel(r'$\sigma_{x,y}$ (mm)')
+        self.axes.legend()
         self.canvas.draw()
 
-    def LoadData(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self, "DataMiner File",
-                                                  "/sf/data/applications/BD-DataMiner/AramisOrbit/data",
-                                                  "HDF5 Files (*.h5)", options=options)
-        if fileName is None:
+    def PlotR(self):
+        if not self.hasModel:
             return
-        self.data.open(fileName)
-        self.hasLoaded = True
+        name = str(self.sender().objectName())
+        x = self.model.s
+        y1 = self.model.rx5
+        y2 = self.model.ry5
+        l1 = r'$R_{16}$'
+        l2 = r'$R_{36}$'
+        ylab = r'$R_{16}, R_{36}$ (m)'
+        if 'R11' in name:
+            y1 = self.model.rx1
+            y2 = self.model.ry3
+            l1 = r'$R_{11}$'
+            l2 = r'$R_{33}$'
+            ylab = r'$R_{11}, R_{33}$'
+        if 'R12' in name:
+            y1 = self.model.rx2
+            y2 = self.model.ry4
+            l1 = r'$R_{12}$'
+            l2 = r'$R_{34}$'
+            ylab = r'$R_{12}, R_{34}$ (m)'
 
+        self.axes.clear()
+        self.axes.plot(x,y1,label=l1)
+        self.axes.plot(x,y2,label=l2)
+        self.axes.set_xlabel(r'$s$ (m)')
+        self.axes.set_ylabel(ylab)
+        self.axes.legend()
+        self.canvas.draw()
 # initializing matplotlib
     def initmpl(self):
         self.fig=Figure()
-        self.axes1=self.fig.add_subplot(221)
-        self.axes2=self.fig.add_subplot(222)
-        self.axes3=self.fig.add_subplot(223)
-        self.axes4=self.fig.add_subplot(224)
+        self.axes=self.fig.add_subplot()
         self.canvas = FigureCanvas(self.fig)
         self.mplvl.addWidget(self.canvas)
         self.canvas.draw()
