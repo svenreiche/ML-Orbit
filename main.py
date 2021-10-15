@@ -4,13 +4,14 @@ os.environ["EPICS_CA_ADDR_LIST"]="sf-cagw"
 os.environ["EPICS_CA_SERVER_PORT"]="5062"
 
 import numpy as np
-
+from scipy import stats
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT as NavigationToolbar)
 
 
+import matplotlib.pyplot as plt
 
 from PyQt5 import QtWidgets,QtGui,QtCore
 from PyQt5.QtWidgets import QFileDialog
@@ -35,23 +36,91 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         self.model = MLOrbitModel.OrbitModel() # interface to Madx to generate R-MAtrix and sampel orbits
         self.train = MLOrbitTrainer.Trainer()  # all Tensorflow stuff
 
+# combination of widgets to select BPMs
+        self.UIloc = [self.UIPCAX, self.UIPCAPX, self.UIPCAY, self.UIPCAPY, self.UIPCAE]
+
 # flags
+        self.hasFile = False
         self.hasModel = False
-        self.hasTraining = False
+#        self.hasTraining = False
+#        self.hasPCA = False
 # event
-        self.UIOpenFile.clicked.connect(self.OpenFile)
-        self.UITrainModel.clicked.connect(self.TrainModel)
+        self.actionLoad.triggered.connect(self.OpenFile)
+        self.UIPCA.clicked.connect(self.AnalyseOrbit)
+        self.UIRepPrev.clicked.connect(self.newReportPlot)
+        self.UIRepNext.clicked.connect(self.newReportPlot)
+        self.UIRepID.editingFinished.connect(self.newReportPlot)
+#        self.UIRMatrix.clicked.connect(self.ReconstructRMatrix)
+#        self.UITrainModel.clicked.connect(self.TrainModel)
+
 # plotting
-        self.actionR11.triggered.connect(self.PlotR)
-        self.actionR12.triggered.connect(self.PlotR)
-        self.actionR16.triggered.connect(self.PlotR)
-        self.actionOrbitRMSMachine.triggered.connect(self.PlotRMS)
-        self.actionOrbitRMSModel.triggered.connect(self.PlotRMS)
+#        self.actionFlucX.triggered.connect(self.PlotFluc)
+#        self.actionFlucY.triggered.connect(self.PlotFluc)
+#        self.actionFlucRes.triggered.connect(self.PlotFluc)
+#        self.actionPCACorX.triggered.connect(self.PlotCor)
+#        self.actionPCACorY.triggered.connect(self.PlotCor)
+
+#        self.UIPlotCor.clicked.connect(self.PlotCor)
+
+#        self.actionValidX.triggered.connect(self.PlotValid)
+#        self.actionValidXP.triggered.connect(self.PlotValid)
+#        self.actionValidY.triggered.connect(self.PlotValid)
+#        self.actionValidYP.triggered.connect(self.PlotValid)
+#        self.actionValidEnergy.triggered.connect(self.PlotValid)
+#        self.actionFlucContX.triggered.connect(self.PlotFlucCont)
+#        self.actionFlucContY.triggered.connect(self.PlotFlucCont)
+#        self.actionLoss.triggered.connect(self.PlotTFStat)
+#        self.actionAccuracy.triggered.connect(self.PlotTFStat)
+
 
     #        self.UIGenerateModel.clicked.connect(self.GenerateModel)
 #        self.UIGenerateTraining.clicked.connect(self.GenerateTraining)
 #        self.UILoadData.clicked.connect(self.LoadData)
 #        self.UICheckTraining.clicked.connect(self.CheckData)
+
+    def OpenFile(self):
+        """
+        Reading in orbit data from measurements and populates the widgets
+        """
+
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getOpenFileName(self, "DataMiner File",
+                                                  "/sf/data/measurements/2021/06/10",
+                                                  "HDF5 Files (*.h5)", options=options)
+        if fileName is None:
+            return
+        self.data.open(fileName)
+        self.hasFile = True
+        # generate madx model from machine settings in file
+        self.model.updateModel(self.data.mag, self.data.energy)
+        # prepare data from the machine
+        self.bpm = [name.split('.MARK')[0].replace('.', '-') for name in self.model.name]
+
+        for UI in self.UIloc:
+            UI.clear()
+        for i, ele in enumerate(self.bpm):
+            for UI in self.UIloc:
+                UI.addItem('%s - X' % ele)
+                UI.addItem('%s - Y' % ele)
+        default_loc = [0, 4, 1, 5, 16]
+        for i, UI in enumerate(self.UIloc):
+            UI.setCurrentIndex(default_loc[i])
+        self.data.getBPM(self.bpm)
+        self.hasModel = True
+
+    def AnalyseOrbit(self):
+
+        if self.hasModel == False:
+            return
+        nbpm = len(self.model.s)
+        loctmp = [UI.currentIndex() for UI in self.UIloc]
+        loc = [int((i-(i % 2))/2 + nbpm*(i % 2)) for i in loctmp]
+        print(loc)
+        self.data.PCA(loc)
+        self.hasPCA = True
+        self.PlotReport(0)
+        return
 
     def TrainModel(self):
         if not self.hasModel:
@@ -77,145 +146,583 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
                         self.model.ydata[n:, :], nepoch)
         self.hasTraining = True
 
-    def OpenFile(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self, "DataMiner File",
-                                                  "/sf/data/applications/BD-DataMiner/AramisOrbit/data",
-                                                  "HDF5 Files (*.h5)", options=options)
-        if fileName is None:
+    def newReportPlot(self):
+        name = self.sender().objectName()
+        if 'Prev' in name:
+            inc = -1
+        elif 'Next' in name:
+            inc = 1
+        else:
+            inc = 0
+        id = int(str(self.UIRepID.text())) + inc
+        self.PlotReport(id)
+
+
+
+    def PlotReport(self,irep):
+        if self.hasPCA == False:
             return
-        self.data.open(fileName)
-        self.hasFile = True
-        # generate madx model from machine settings in file
-        self.model.updateModel(self.data.mag, self.data.energy)
-        # prepare data from the machine
-        bpm = [name.split('.MARK')[0].replace('.','-') for name in self.model.name]
-        self.data.getBPM(bpm)
-        self.hasModel = True
 
-#------------------------------
+        maxplot = 7
+        if irep > maxplot:
+            irep = 0
+        if irep < 0:
+            irep = maxplot
 
-    def CheckData(self):
-        if not self.hasMachineData:
-            self.LoadData()
-        if not self.hasTraining:
-            self.TrainModel()
+        self.UIRepID.setText('%d' % irep)
 
-        pred = self.train.predict(self.data.data)
-        rms = np.std(pred[:, 0])*1e3
-        self.UIOrbitX.setText('%f' % rms)
-        rms = np.std(pred[:, 1])*1e3
-        self.UIAngleX.setText('%f' % rms)
-        rms = np.std(pred[:, 2])*1e3
-        self.UIOrbitY.setText('%f' % rms)
-        rms = np.std(pred[:, 3])*1e3
-        self.UIAngleY.setText('%f' % rms)
-        rms = np.std(pred[:, 4])
-        self.UIEnergy.setText('%f' % rms)
+        nbpm = len(self.model.s)
+        self.axes.clear()
+        if irep == 0:
+            data1 = np.stack([self.data.jit[0, 0:nbpm],self.data.jit[0, nbpm:]])*1e3
+            data2 = np.stack([self.data.jit[-1, 0:nbpm],self.data.jit[-1, nbpm:]])*1e3
+            title ='Orbit Fluctuation in X and Y'
+            xlab = r'$s$ (m)'
+            ylab = r'$\sigma_{x,y}$ ($\mu$m)'
+            leg = ['X','Y']
+            plotstyle=['b','r']
+            for i in range(data1.shape[0]):
+                self.axes.plot(self.model.s, data1[i, :], plotstyle[i]+'--', label=leg[i] + ' (initial)')
+                self.axes.plot(self.model.s, data2[i, :], plotstyle[i], label=leg[i] + ' (residual)')
+        elif irep == 1 or irep == 2:
+            if irep == 1:
+                title = 'Relative Fluctuation in X'
+            else:
+                title = 'Relative Fluctuation in Y'
+            xlab = r'BPM'
+            ylab = r'$\sigma_{x,y}$ ($\mu$m)'
+            if irep == 1:
+                flucnorm= self.data.jit[0,0:nbpm]**2
+            else:
+                flucnorm = self.data.jit[0,nbpm:]**2
+            botfluc = flucnorm*0
+            x = np.arange(nbpm)
+            labels = ['x','px*','y*','py*','E*']
+            for j in range(1, 6):
+                if irep == 1:
+                    fluc = -(self.data.jit[j, 0:nbpm]**2-self.data.jit[j-1, 0:nbpm]**2)/flucnorm
+                else:
+                    fluc = -(self.data.jit[j, nbpm:]**2-self.data.jit[j-1, nbpm:]**2)/flucnorm
+                self.axes.bar(x, fluc, bottom=botfluc, label=labels[j-1])
+                botfluc = botfluc + fluc
+            if irep == 1:
+                fluc = (self.data.jit[-1, 0:nbpm]**2)/flucnorm
+            else:
+                fluc = (self.data.jit[-1, nbpm:]**2)/flucnorm
+            self.axes.bar(x, fluc, bottom=botfluc, label='Res.')
+        elif irep > 2 and irep < 8:
+            id = irep-3
+            tag = ['X','Px*','Y*','Py*','Energy*']
+            title = 'Correlation for Component C:' + tag[id]
+            xlab = r'$s$ (m)'
+            ylab = r'$<C\cdot {x,y}>$'
+            self.axes.plot(self.model.s, self.data.r[id,0:nbpm],label='X-Plane')
+            self.axes.plot(self.model.s, self.data.r[id,nbpm:],label='Y-Plane')
+        else:
+            return
+        self.axes.legend()
+        self.axes.set_xlabel(xlab)
+        self.axes.set_ylabel(ylab)
+        self.axes.set_title(title)
+        self.canvas.draw()
+        return
 
-        n=int(self.data.data.shape[1]/2)
-        datacor=self.data.data-np.transpose(np.matmul(self.model.r,np.transpose(pred)))
+    def PlotCor(self):
+        if self.hasPCA == False:
+            return
+        nbpm = len(self.model.s)
+        self.axes.clear()
+        sels = self.UIXPCA.selectedItems()
+        for sel in sels:
+            source = str(sel.text())
+            idx = self.UIXPCA.row(sel)
+            self.axes.plot(self.model.s,self.data.r[idx,0:nbpm],label='X vs %s' % source)
+            self.axes.plot(self.model.s,self.data.r[idx,nbpm:],label='Y vs %s' % source)
 
-
-        self.axes1.clear()
-        self.axes1.plot(self.model.s, np.std(self.data.data[:, 0:n], axis=0))
-        self.axes1.plot(self.model.s, np.std(self.data.data[:, n:], axis=0))
-
-        self.axes2.clear()
-        self.axes2.plot(self.model.s, np.std(datacor[:, 0:n], axis=0))
-        self.axes2.plot(self.model.s, np.std(datacor[:, n:], axis=0))
-
-        self.axes3.clear()
-        self.axes4.clear()
+        self.axes.legend()
+        self.axes.set_ylabel(r'$<z_j\cdot z_{BPM}>$')
+        self.axes.set_xlabel(r'$s$ (m)')
         self.canvas.draw()
 
+#        if 'X' in name:
+#            data = self.data.r[:,0:nbpm]
+#        else:
+#            data = self.data.r[:,nbpm:]
+
+        #        ylab = r'$Cor(\vec{X},x_j)$'
+#        leg = []
+#            for i in range(data.shape[0]):
+#                leg.append(self.bpm[self.data.locx[i]])
+#        elif 'Y' in name:
+#            data = self.data.ry
+#            ylab = r'$Cor(\vec{Y},y_j)$'
+#            leg = []
+#            for i in range(0, data.shape[0]):
+#                leg.append(self.bpm[self.data.locy[i] - len(self.bpm)])
+#        self.axes.clear()
+ #       for i in range(data.shape[0]):
+ #           self.axes.plot(self.model.s,data[i,:])
+
+#        self.axes.legend()
+ #       self.axes.set_xlabel(r'$s$ (m)')
+#        self.axes.set_ylabel(ylab)
+ #       self.canvas.draw()
 
 
 
-    def TrainModelOld(self):
-        if not self.hasData:
-            self.GenerateTraining()
+
+
+    def test(self):
+
+
+        dist = self.data.data[:, 0]
+        idx = np.argmin(np.squeeze(np.abs(dist[1:])))
+        print(idx,dist[idx],self.data.data[idx,0])
+        for i in range(4):
+            xorb[i] = self.data.data[idx,i]
+
+
+        plt.scatter(np.abs(dist),self.data.data[:,1],s=0.5)
+        plt.xlim([0,0.001])
+        plt.show()
+        xref1 = res[0,:]*xorb[0]
+
+
+
+        dif = (xorb-xref1)
+ #       difref = res[1,:
+        plt.plot(xorb)
+        plt.plot(xref1)
+        plt.show()
+        plt.plot(dif)
+ #       plt.plot(difref)
+        plt.show()
+
+    def tmp(self):
+
+        nbpm = len(self.model.s)
+
+        res = self.model.getResponse(0)
+        xref = self.data.data[:,0]
+        yref = self.data.data[:,0+nbpm]
+
+        rms = np.zeros((2,3))
+        for i in range(1,4):
+
+
+            distx = self.data.data[:,i]
+            disty = self.data.data[:,i+nbpm]
+
+            if i == 2:
+                distx*=0.9
+                disty*=0.9
+
+            distx -= res[0,i]*xref
+            disty -= res[2,i]*yref
+
+            distx /= res[1,i]
+            disty /= res[3,i]
+
+            alphax = np.polyfit(xref, distx, 1)[0]
+            alphay = np.polyfit(yref, disty, 1)[0]
+
+            distx -= alphax * xref
+            disty -= alphay * yref
+
+            rms[0,i-1] = np.std(distx)
+            rms[1,i-1] = np.std(disty)
+
+
+        plt.plot(rms[0,:])
+        plt.plot(rms[1,:])
+
+        plt.show()
+
+
+    def AnalyseOrbitOLd(self):
+
+        # step 1 - derive phase space distribution from the three BPM readings SARMA01-DBPM010/020/40
+        noff = len(self.model.s)
+        idx=-1
+        L = 2.049 # distance between two quads
+        for i,name in enumerate(self.model.name):
+            if 'SARMA02.DBPM010.MARK' == name:
+                idx = i
+        if idx < 0:
+                print('BPM not found')
+                return
+        xref = self.data.data[:, idx]   # use as reference distribution
+        xpref = (self.data.data[:, idx+2]-xref)/2/L
+        yref = self.data.data[:, idx+noff]
+        ypref = (self.data.data[:, idx+2+noff]-yref)/2/L
+        fitx = np.polyfit(xref,xpref,1)[0]
+        fity = np.polyfit(yref,ypref,1)[0]
+        xpref -= fitx * xref    # remove any correlation to have independent jitters
+        ypref -= fity * yref
+        xstd = np.std(xref)
+        xpstd = np.std(xpref)
+        ystd = np.std(yref)
+        ypstd = np.std(ypref)
+
+        # step 2 - correlation along the machine
+        flucx= np.zeros((noff-idx))
+        flucy= np.zeros((noff-idx))
+
+        rmat = np.zeros((4,4,noff-idx))
+        s = self.model.s[idx:]
+        for i in range(idx,noff):
+            flucx[i-idx] = np.std(self.data.data[:,i])
+            flucy[i-idx] = np.std(self.data.data[:,i+noff])
+            rmat[0, 0, i - idx] = np.polyfit(xref, self.data.data[:,i],1)[0]
+            rmat[0, 1, i - idx] = np.polyfit(xpref, self.data.data[:,i],1)[0]
+            rmat[2, 2, i - idx] = np.polyfit(yref, self.data.data[:, i+noff], 1)[0]
+            rmat[2, 3, i - idx] = np.polyfit(ypref, self.data.data[:, i+noff], 1)[0]
+            rmat[0, 2, i - idx] = np.polyfit(yref, self.data.data[:,i],1)[0]
+            rmat[0, 3, i - idx] = np.polyfit(ypref, self.data.data[:,i],1)[0]
+            rmat[2, 0, i - idx] = np.polyfit(xref, self.data.data[:, i+noff], 1)[0]
+            rmat[2, 1, i - idx] = np.polyfit(xpref, self.data.data[:, i+noff], 1)[0]
+
+
+        flucxcor = np.sqrt((rmat[0,0,:] * xstd)**2 + (rmat[0,1,:] * xpstd)**2 + (rmat[0,2,:] * ystd)**2 + (rmat[0,3,:] * ypstd)**2)
+        flucycor = np.sqrt((rmat[2,0,:] * xstd)**2 + (rmat[2,1,:] * xpstd)**2 + (rmat[2,2,:] * ystd)**2 + (rmat[2,3,:] * ypstd)**2)
+
+
+        plt.scatter(xref,yref,s=0.5)
+        plt.show()
+
+        plt.plot(s, flucx, label='Measured')
+        plt.plot(s, flucxcor, label='Reconstructed')
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$\sigma_x$ (mm)')
+        plt.legend()
+        plt.show()
+
+        plt.plot(s, flucy)
+        plt.plot(s, flucycor)
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$\sigma_y$ (mm)')
+        plt.legend()
+        plt.show()
+
+        plt.plot(s,rmat[0,0,:], label=r'$R_{11}$')
+        plt.plot(s,rmat[2,2,:], label=r'$R_{33}$')
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$R_{11}, R_{33}$')
+        plt.legend()
+        plt.show()
+
+
+        plt.plot(s,rmat[0,1],label=r'$R_{12}$')
+        plt.plot(s,rmat[2,3],label=r'$R_{34}$')
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$R_{12}, R_{34}$ (m)')
+        plt.legend()
+        plt.show()
+
+        plt.plot(s, rmat[0, 2], label=r'$R_{13}$')
+        plt.plot(s, rmat[2, 0], label=r'$R_{31}$')
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$R_{13}, R_{31}$ (m)')
+        plt.legend()
+        plt.show()
+
+        plt.plot(s, rmat[0, 3], label=r'$R_{14}$')
+        plt.plot(s, rmat[2, 1], label=r'$R_{32}$')
+        plt.xlabel('s (m)')
+        plt.ylabel(r'$R_{14}, R_{32}$ (m)')
+        plt.legend()
+        plt.show()
+
+        #       plt.scatter(xref, xpref, s=0.5, label='X-Plane')
+#       plt.scatter(yref, ypref, s=0.5, label='Y-Plane')
+#       plt.legend()
+#       plt.show()
+
+        if True:
+            return
+
+        nz=5    # number of bpms
+
+        xref = self.data.data[:, 0]
+        xpref= xref*0
+        xsig = np.zeros(nz)
+        xsig[0] = np.std(xref)
+        cor11 = np.zeros(nz)
+        cor12 = np.zeros(nz)
+        cor11[0] = 1.
+
+        for i in range(1,nz):
+            xdist = self.data.data[:,i]
+            xsig[i] = np.std(xdist)
+            cor11[i] = np.polyfit(xref, xdist, 1)[0]
+            xdist = xdist - cor11[i]*xref
+            if i == 1:
+                xpref = xdist
+                cor12[i] = 1
+            else:
+                cor12[i] = np.polyfit(xpref, xdist, 1)[0]
+        s = self.model.s[0:nz]
+        rx = self.model.rx1[0:nz]
+        rxp = self.model.rx2[0:nz]
+
+        cor12=cor12*rxp[1]/cor12[1]
+        dif = rx[1]-cor11[1]
+        corr = cor12*dif/cor12[1]
+        plt.plot(s,cor11)
+        plt.plot(s,rx)
+        plt.plot(s,cor11+corr)
+        plt.show()
+        plt.plot(s,cor12)
+        plt.plot(s,rxp)
+        plt.show()
+
+        if True:
+                return
+
+
+
+        ry = self.model.ry3[0:nz]
+        ryp = self.model.ry4[0:nz]
+        rxp /= rxp[1]
+        ryp /= ryp[1]
+        rd = self.model.rx5[0:nz]
+
+        rmat=np.zeros((nz,5))     # the calculated rmatirx
+        fluc = np.zeros((nz,2))    # the current fluctuation
+        fluccor = np.zeros((nz,2))  # the corrected fluctuation
+        flucres = np.zeros((nz,2))  # the residual fluctuation
+        # first step: Jitter in x and y
+
+        xref = self.data.data[:, 0]
+        yref = self.data.data[:, noff]
+        rmat[0, 0] = 1
+        rmat[0, 2] = 1
+        fluc[0, 0] = np.std(xref)
+        fluc[0, 1] = np.std(yref)
+        fluccor[0,0] = 0*fluc[0, 0]
+        fluccor[0,1] = 0*fluc[0, 1]
+        flucres[0,0] = 0
+        flucres[0,1] = 0
+        for i in range(1,nz):
+            xdist = self.data.data[:, i]
+            ydist = self.data.data[:, i + noff]
+            fluc[i, 0] = np.std(xdist)
+            fluc[i, 1] = np.std(ydist)
+            corx = np.polyfit(xref, xdist, 1)[0]
+            cory = np.polyfit(yref, ydist, 1)[0]
+            rmat[i, 0] = corx
+            rmat[i, 2] = cory
+#            xdist = xdist - corx * xref
+#            ydist = ydist - cory * yref
+            fluccor[i, 0] = np.sqrt(fluc[i, 0]**2 - np.abs(corx)**2 * fluc[0, 0]**2)
+            fluccor[i, 1] = np.sqrt(fluc[i, 1]**2 - np.abs(cory)**2 * fluc[0, 1]**2)
+            if i == 1:
+                xpref = xdist - corx * xref
+                ypref = ydist - cory * yref
+                rmat[i, 1] = 1
+                rmat[i, 3] = 1
+                flucres[i, 0] = 0
+                flucres[i, 1] = 0
+            else:
+                corx = np.polyfit(xpref, xdist, 1)[0]
+                cory = np.polyfit(ypref, ydist, 1)[0]
+                rmat[i, 1] = corx
+                rmat[i, 3] = cory
+                flucres[i, 0] = np.sqrt(fluccor[i, 0] ** 2 - np.abs(corx) ** 2 * fluccor[1, 0] ** 2)
+                flucres[i, 1] = np.sqrt(fluccor[i, 1] ** 2 - np.abs(cory) ** 2 * fluccor[1, 1] ** 2)
+
+
+#            if i == 2:
+#                plt.scatter(xref,self.data.data[:, i],s=0.5)
+#                plt.scatter(xref,xdist,s=0.5)
+#                plt.show()
+#                plt.scatter(xpref,xdist,s=0.5)
+#                plt.scatter(xpref,xdist-corx*xpref,s=0.5)
+#                plt.show()
+
+
+        plt.plot(s,rmat[:,0])
+        plt.plot(s, rx)
+        plt.show()
+
+        plt.plot(s,rmat[:,2])
+        plt.plot(s,ry)
+        plt.show()
+
+        plt.plot(s,rmat[:,1])
+        plt.plot(s, rxp)
+        plt.show()
+
+        plt.plot(s,rmat[:,3])
+        plt.plot(s, ryp)
+        plt.show()
+
+
+        plt.plot(s,rd)
+        plt.show()
+
+        plt.plot(s,fluc[:,0])
+        plt.plot(s,fluccor[:,0])
+        plt.plot(s,flucres[:,0])
+        plt.show()
+
+        plt.plot(s,fluc[:,1])
+        plt.plot(s,fluccor[:,1])
+        plt.plot(s,flucres[:,1])
+
+        plt.show()
+        return
+
+    def ooo(self):
+        rx=self.model.r[0:5,0]
+        ry=self.model.r[0:5,1]
+        x=self.data.data[12,0:5]
+
+        a00=np.sum(rx*rx)
+        a01=np.sum(rx*ry)
+        a10=np.sum(rx*ry)
+        a11=np.sum(ry*ry)
+
+        detA = a00*a11-a01*a10
+        c0=np.sum(rx*x)
+        c1=np.sum(ry*x)
+
+        B = (a00*c1-a10*c0)/detA/2
+        A = (a11*c0-a01*c1)/detA/2
+
+
+        xpre = rx*A+ry*B
+        plt.plot(x)
+        plt.show()
+        plt.plot(rx)
+#        plt.plot(ry*B)
+#        plt.plot(rx*A+ry*B)
+        plt.show()
+        plt.plot(ry)
+        plt.show()
+
+    def tmp(self):
+        x_data = self.train.model.predict(self.data.data)    # this is the prediction
+        orb_model = np.transpose(np.matmul(self.model.r,np.transpose(x_data)))
+
+
 
         nepoch = int(str(self.UITrainEpochs.text()))
-        n = int(self.model.xdata.shape[0]*0.75)  # 75 percent are training and rest testing
-        x_train = self.model.xdata[0:n, :]
-        y_train = self.model.ydata[0:n, :]
-        x_test = self.model.xdata[n:, :]
-        y_test = self.model.ydata[n:, :]
-
-        y_predict, loss, acc, val_loss, val_acc = self.train.runTF(x_train, y_train, x_test, y_test, nepoch)
-        ep = np.linspace(1, nepoch, num=nepoch)
-        self.hasTraining = True
-        self.axes1.clear()
-        self.axes1.plot(ep,loss,label=r'Training Set')
-        self.axes1.plot(ep,val_loss,label=r'Test Set')
-        self.axes1.set_xlabel('Epoch')
-        self.axes1.set_ylabel('Loss Function')
-        self.axes1.legend()
-
-        self.axes2.clear()
-        self.axes2.plot(ep, acc, label=r'Training Set')
-        self.axes2.plot(ep, val_acc, label=r'Test Set')
-        self.axes2.set_xlabel('Epoch')
-        self.axes2.set_ylabel('Accuracy')
-        self.axes2.legend()
-
-        self.axes3.clear()
-        self.axes3.scatter(y_test[:,4],y_predict[:,4],s=0.5)
-        self.axes3.set_xlabel(r'Input Energy Jitter (0.1%)')
-        self.axes3.set_ylabel(r'Reconstructed Jitter (0.1%)')
-
-        self.axes4.clear()
-        self.axes4.scatter(y_test[:, 0], y_predict[:, 0], s=0.5)
-        self.axes4.set_xlabel(r'Input Orbit Jitter in X (mm)')
-        self.axes4.set_ylabel(r'Reconstructed Jitter (mm)')
-
-        self.canvas.draw()
-
-
-
-    def GenerateTraining(self):
-        if not self.hasModel:
-            self.GenerateModel()
-
-        nsam = int(str(self.UITrainSamples.text()))
-        errorbx = float(str(self.UIOrbitX.text()))*1e-3
-        errangx = float(str(self.UIAngleX.text()))*1e-3
-        errorby = float(str(self.UIOrbitY.text()))*1e-3
-        errangy = float(str(self.UIAngleY.text()))*1e-3
-        errerg = float(str(self.UIEnergy.text()))
-        errbpm = float(str(self.UIBPM.text()))*1e-3
-        fluc=self.model.generateTrainingsData(nsam,[errorbx,errangx,errorby,errangy,errerg,errbpm])
-        self.hasData = True
-        nx=int(fluc.shape[0]/2)
-
-        self.axes1.clear()
-        yold=fluc[0:nx,0]*0
+        x_test = np.zeros((5, 5))
         for i in range(5):
-            ynew = np.sqrt(yold**2+fluc[0:nx,i]**2)
-            self.axes1.fill_between(self.model.s,ynew,yold)
-            yold = ynew
+            x_test[i, i] = 1
 
-        self.axes2.clear()
-        for i in range(5):
-            self.axes2.plot(self.model.s, fluc[0:nx,i])
+        r_cor=np.transpose(self.train.runTFInv(x_data, y_data, x_test, nepoch))
+        print(r_cor.shape)
 
-        self.axes3.clear()
-        yold = fluc[nx:, 0] * 0
-        for i in range(5):
-            ynew = np.sqrt(yold ** 2 + fluc[nx:, i] ** 2)
-            self.axes3.fill_between(self.model.s, ynew, yold)
-            yold = ynew
-
-        self.axes4.clear()
-        for i in range(5):
-            self.axes4.plot(self.model.s, fluc[nx:, i])
-
-        self.canvas.draw()
+#        for i in range(5):
+#            plt.plot(self.model.r[:,i])
+#            plt.plot(r_cor[:, i])
+#            plt.show()
 
 
+ #       rms = np.std(pred[:, 0])*1e3
+ #       self.UIOrbitX.setText('%f' % rms)
+ #       rms = np.std(pred[:, 1])*1e3
+ #       self.UIAngleX.setText('%f' % rms)
+ #       rms = np.std(pred[:, 2])*1e3
+ #       self.UIOrbitY.setText('%f' % rms)
+ #       rms = np.std(pred[:, 3])*1e3
+ #       self.UIAngleY.setText('%f' % rms)
+ #       rms = np.std(pred[:, 4])
+ #       self.UIEnergy.setText('%f' % rms)
+
+
+
+
+
+
+
+#-----------------------------------------------
 # plotting routine
+
+    def PlotTFStat(self):
+        if not self.hasTraining:
+            return
+        name = str(self.sender().objectName())
+        if 'Loss' in name:
+            y1 = self.train.history.history['loss']
+            y2 = self.train.history.history['val_loss']
+            ylab = 'Loss Function'
+        elif 'Accuracy' in name:
+            y1 = self.train.history.history['accuracy']
+            y2 = self.train.history.history['val_accuracy']
+            ylab = 'Accuracy'
+        else:
+            return
+        self.axes.clear()
+        eph = self.train.history.epoch
+        self.axes.plot(eph, y1, label='Training Set')
+        self.axes.plot(eph, y2, label='Validation Set')
+        self.axes.set_xlabel('Epoch')
+        self.axes.set_ylabel(ylab)
+        self.legend()
+        self.canvas.draw()
+
+
+    def PlotFlucCont(self):
+        if not self.hasTraining:
+            return
+        name = str(self.sender().objectName())
+        nx = len(self.model.s)
+        y = self.model.ydata
+
+        if 'X' in name:
+            r = self.model.r[0:nx,:]
+            lab = r'$\sigma_x$ (mm)'
+        else:
+            r = self.model.r[nx:,:]
+            lab = r'$\sigma_y$'
+
+        labels = ['X', 'XP', 'Y', 'YP', 'Energy']
+
+        self.axes.clear()
+        yold=self.model.s*0
+        for i in range(5):
+            orb = np.abs(r[:, i])*np.std(y[:, i])
+            ynew = np.sqrt(yold**2+orb**2)
+            self.axes.fill_between(self.model.s, ynew, yold,label=labels[i])
+            yold = ynew
+        self.axes.set_xlabel(r'$s$ (m)')
+        self.axes.set_ylabel(lab)
+        self.axes.legend()
+        self.canvas.draw()
+
+
+    def PlotValid(self):
+        if not self.hasTraining:
+            return
+        name = str(self.sender().objectName())
+        idx = 4
+        title = 'Energy'
+        if 'XP' in name:
+            idx = 1
+            title = 'XP'
+        elif 'X' in name:
+            idx = 0
+            title = 'X'
+        elif 'YP' in name:
+            idx = 3
+            title = 'YP'
+        elif 'Y' in name:
+            idx = 2
+            title = 'Y'
+        self.axes.clear()
+        x = np.concatenate([y for x, y in self.train.val_dataset], axis=0)
+        y = np.concatenate([y for y in self.train.predict], axis=0)
+        y = np.reshape(y,x.shape)
+        self.axes.scatter(x[:,idx],y[:,idx],s=0.5)
+        self.axes.set_xlabel('Input Jitter')
+        self.axes.set_ylabel('Reconstructed Jitter')
+        self.axes.set_title('Jitter in %s' % title)
+        self.canvas.draw()
+
+
     def PlotRMS(self):
         if not self.hasModel:
             return
