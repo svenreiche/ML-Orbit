@@ -1,7 +1,8 @@
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
-
+import copy
+import datetime
 from scipy import stats
 
 class OrbitData:
@@ -49,100 +50,49 @@ class OrbitData:
 
             self.data[:,:] -= self.data[0,:]
 
-    def PCA(self,loc):
+        self.data -= self.data.mean(axis=0)   # take out center of mass
+
+    def PCA(self):
 
 
         nshape = self.data.shape
         nbpm = nshape[1]
         nsam = nshape[0]
-        self.loc = loc
 
+        # Step 1 - SVD
 
-        # step 0 - trying the SVD
+        self.datasave = copy.deepcopy(self.data)
+        self.optx=np.zeros((10))
+        self.opty=np.zeros((10))
+        evecold = np.zeros((nbpm,2))
+        Nt=4000
 
-#        X = self.data[:,0:nbpm]
-#        Xcen = X - X.mean(axis=0)
-#        U, s, Vt = np.linalg.svd(Xcen)
-#        c1 = Vt.T[:,0]
-#        c2 = Vt.T[:,1]
-#        c3 = Vt.T[:,2]
-
-#        plt.plot(c1)
-#        plt.plot(c2)
-#        plt.plot(c3)
-#        plt.show()
-#        plt.semilogy(s[0:10])
-#        plt.show()
-
-#        X = self.data[:, nbpm:]
-#        Xcen = X - X.mean(axis=0)
-#        U, s, Vt = np.linalg.svd(Xcen)
-#        c1 = Vt.T[:, 0]
-#        c2 = Vt.T[:, 1]
-#        c3 = Vt.T[:, 2]
-
-#        plt.plot(c1)
-#        plt.plot(c2)
-#        plt.plot(c3)
-#        plt.show()
-#        plt.semilogy(s[0:10])
-#        plt.show()
-
-
-        # step 1 - reference error sources
-        nsrc = len(loc)
-
-        self.ref = np.zeros((nsrc, nsam))
-
-        for i in range(nsrc):   # taking out all correlation
-            self.ref[i,:] = self.data[:, loc[i]]
-            for j in range(i):
-                slope, intercep, r, pval, stderr = stats.linregress(self.ref[j,:], self.ref[i,:])
-                self.ref[i, :] -= slope * self.ref[j, :]
-
-        # step 2 - calculate toe correlation function and the jitter budget
-        self.r = np.zeros((nsrc,nbpm))
+        X = self.data[:Nt,:]
+        U, s, Vt = np.linalg.svd(X)
+        self.svd = s**2/np.sum(s**2)
+        self.evec = Vt.T
 
         # the jitter budgets
-        self.jit = np.zeros((nsrc+1,nbpm))
+        self.nevec = 6
+        self.jit = np.zeros((self.nevec+1,nbpm))
 
-        ires = []
-        xres =[]
-        for i in range(nbpm):
-            dist = self.data[:, i]
-            self.jit[0,i] = np.std(dist)
-            for j in range(nsrc):
-                if np.std(self.ref[j, :]) > 0:
-                    slope, intercep, r, pval, stderr = stats.linregress(self.ref[j,:], dist)
-                else:
-                    slope = 0
-                self.r[j,i] = slope
-                dist = dist - slope * self.ref[j,:]
-                self.jit[j+1,i] = np.std(dist)
-            xres.append(dist[0:1000])
+        self.r1 = np.zeros(nbpm)
+        for i in range(self.nevec):
+            self.r1 += self.svd[i]*self.evec[:,i]
+
+        self.jitsrc=np.zeros((self.nevec,nsam))
+
+        for isrc in range(self.nevec):
+            self.jit[isrc, :] = np.std(self.data, axis=0)
+            cvec = self.evec[:, isrc]
+            self.jitsrc[isrc,:]=np.dot(self.data,cvec)
+            for ibpm in range(nbpm):
+                self.data[:,ibpm] -=self.jitsrc[isrc,:]*cvec[ibpm]
+        self.jit[self.nevec, :] = np.std(self.data, axis=0)
+
+        return
 
 
-
-        #step 2 - do SVD on residual fluctuation
-        X = np.transpose(np.array(xres))
-
-        Xcen = X - X.mean(axis=0)
-        U, s, Vt = np.linalg.svd(Xcen)
-        plt.plot(s[0:10])
-        plt.show()
-        c1 = np.abs(Vt.T[:, 0])
-        c1 = c1 /np.max(c1) * np.max(self.jit[-1,:])
-        plt.plot(c1)
-        plt.show()
-
-        plt.plot(self.jit[-1,:])
-        plt.plot(c1)
-        plt.show()
-
-        for j in range(0,10):
-            c2 = np.abs(Vt.T[:, j]*s[j])
-            plt.plot(c2)
-            plt.show()
 
 
     def ReconstructR(self, model):

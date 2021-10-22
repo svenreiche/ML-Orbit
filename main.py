@@ -36,8 +36,6 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         self.model = MLOrbitModel.OrbitModel() # interface to Madx to generate R-MAtrix and sampel orbits
         self.train = MLOrbitTrainer.Trainer()  # all Tensorflow stuff
 
-# combination of widgets to select BPMs
-        self.UIloc = [self.UIPCAX, self.UIPCAPX, self.UIPCAY, self.UIPCAPY, self.UIPCAE]
 
 # flags
         self.hasFile = False
@@ -97,15 +95,6 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         # prepare data from the machine
         self.bpm = [name.split('.MARK')[0].replace('.', '-') for name in self.model.name]
 
-        for UI in self.UIloc:
-            UI.clear()
-        for i, ele in enumerate(self.bpm):
-            for UI in self.UIloc:
-                UI.addItem('%s - X' % ele)
-                UI.addItem('%s - Y' % ele)
-        default_loc = [0, 4, 1, 5, 16]
-        for i, UI in enumerate(self.UIloc):
-            UI.setCurrentIndex(default_loc[i])
         self.data.getBPM(self.bpm)
         self.hasModel = True
 
@@ -114,10 +103,17 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         if self.hasModel == False:
             return
         nbpm = len(self.model.s)
-        loctmp = [UI.currentIndex() for UI in self.UIloc]
-        loc = [int((i-(i % 2))/2 + nbpm*(i % 2)) for i in loctmp]
-        print(loc)
-        self.data.PCA(loc)
+
+        self.data.PCA()
+#        self.axes.clear()
+#        self.axes.loglog(self.data.optx,self.data.opty)
+#        self.axes.set_xlabel(r'# Samples')
+#        self.axes.set_ylabel(r'$\Delta ||\vec{n}_j-\vec{n}_{j-1}||$')
+#        self.axes.set_ylabel(r'$t$ (s)')
+#        self.axes.set_title(r'Execution Time of PCA Algorithm')
+#        self.canvas.draw()
+
+        self.model.fitEvec(self.data.evec, 12)
         self.hasPCA = True
         self.PlotReport(0)
         return
@@ -157,70 +153,129 @@ class MLOrbitGUI(QMainWindow, Ui_MLOrbitGUI):
         id = int(str(self.UIRepID.text())) + inc
         self.PlotReport(id)
 
-
-
     def PlotReport(self,irep):
         if self.hasPCA == False:
             return
-
-        maxplot = 7
+        maxplot = 14+38
         if irep > maxplot:
             irep = 0
         if irep < 0:
             irep = maxplot
-
+        haslegend = True
         self.UIRepID.setText('%d' % irep)
 
         nbpm = len(self.model.s)
         self.axes.clear()
         if irep == 0:
-            data1 = np.stack([self.data.jit[0, 0:nbpm],self.data.jit[0, nbpm:]])*1e3
-            data2 = np.stack([self.data.jit[-1, 0:nbpm],self.data.jit[-1, nbpm:]])*1e3
-            title ='Orbit Fluctuation in X and Y'
-            xlab = r'$s$ (m)'
-            ylab = r'$\sigma_{x,y}$ ($\mu$m)'
-            leg = ['X','Y']
-            plotstyle=['b','r']
-            for i in range(data1.shape[0]):
-                self.axes.plot(self.model.s, data1[i, :], plotstyle[i]+'--', label=leg[i] + ' (initial)')
-                self.axes.plot(self.model.s, data2[i, :], plotstyle[i], label=leg[i] + ' (residual)')
+            self.axes.set_aspect('equal')
+        else:
+            self.axes.set_aspect('auto')
+            self.axes.set_frame_on(True)
+        if irep == 0:
+            title ='Distribution of Principle Jitter Sources'
+            data = self.data.svd[0:8]
+            data[7]=np.sum(self.data.svd[7:])
+            data *= 100.
+            explode = (0,0,0,0,0.15,0.3,0.45,0.6)
+            wedges, texts, autotexts =self.axes.pie(data,explode=explode,autopct='%1.1f%%',startangle=180)
+            xlab=''
+            ylab=''
+            haslegend = False
         elif irep == 1 or irep == 2:
             if irep == 1:
                 title = 'Relative Fluctuation in X'
             else:
                 title = 'Relative Fluctuation in Y'
             xlab = r'BPM'
-            ylab = r'$\sigma_{x,y}$ ($\mu$m)'
+            ylab = r'$\sigma_{x,y}$ (rel)'
             if irep == 1:
                 flucnorm= self.data.jit[0,0:nbpm]**2
             else:
                 flucnorm = self.data.jit[0,nbpm:]**2
             botfluc = flucnorm*0
             x = np.arange(nbpm)
-            labels = ['x','px*','y*','py*','E*']
-            for j in range(1, 6):
+            for j in range(1, self.data.nevec+1):
                 if irep == 1:
                     fluc = -(self.data.jit[j, 0:nbpm]**2-self.data.jit[j-1, 0:nbpm]**2)/flucnorm
                 else:
                     fluc = -(self.data.jit[j, nbpm:]**2-self.data.jit[j-1, nbpm:]**2)/flucnorm
-                self.axes.bar(x, fluc, bottom=botfluc, label=labels[j-1])
+                self.axes.bar(x, fluc, bottom=botfluc, label=('%d. Component' % j))
                 botfluc = botfluc + fluc
             if irep == 1:
                 fluc = (self.data.jit[-1, 0:nbpm]**2)/flucnorm
             else:
                 fluc = (self.data.jit[-1, nbpm:]**2)/flucnorm
-            self.axes.bar(x, fluc, bottom=botfluc, label='Res.')
-        elif irep > 2 and irep < 8:
-            id = irep-3
-            tag = ['X','Px*','Y*','Py*','Energy*']
-            title = 'Correlation for Component C:' + tag[id]
-            xlab = r'$s$ (m)'
-            ylab = r'$<C\cdot {x,y}>$'
-            self.axes.plot(self.model.s, self.data.r[id,0:nbpm],label='X-Plane')
-            self.axes.plot(self.model.s, self.data.r[id,nbpm:],label='Y-Plane')
+            self.axes.bar(x, fluc, bottom=botfluc, label='Residual')
+        elif irep == 3 or irep == 4:
+            if irep == 3:
+                title = 'Fluctuation in X'
+                ylab = r'$\sigma_{x}$ ($\mu$m)'
+
+            else:
+                title = 'Fluctuation in Y'
+                ylab = r'$\sigma_{y}$ ($\mu$m)'
+
+            xlab = r'$z$ (m)'
+            labels=['%d. Component' % j for j in range(nbpm)]
+            labels[0]='Full'
+            for j in range(0, self.data.nevec+1):
+                if irep == 3:
+                    fluc = self.data.jit[j, 0:nbpm]
+                else:
+                    fluc = self.data.jit[j, nbpm:]
+                self.axes.plot(self.model.s, fluc*1e3, label=labels[j])
+
+        elif irep > 4 and irep < 11:
+            title = 'Eigenvector for Mode %d' % (irep-4)
+            xlab = r'$z$ (m)'
+            ylab = r'$\vec{v}$'
+            rfit=0
+            for i in range(5):
+                rfit += self.model.corR[irep-5, i]*self.model.r[:, i]
+            self.axes.plot(self.model.s, self.data.evec[0:nbpm, irep - 5] * self.data.svd[irep - 5], 'b', label='X')
+            self.axes.plot(self.model.s, self.data.evec[nbpm:, irep - 5] * self.data.svd[irep - 5], 'r', label='Y')
+            self.axes.plot(self.model.s, rfit[0:nbpm] * self.data.svd[irep - 5], 'b--', label='X-Fit')
+            self.axes.plot(self.model.s, rfit[nbpm:] * self.data.svd[irep - 5], 'r--', label='Y-Fit')
+        elif irep > 10 and irep < 15:
+            haslegend = False
+            idx = [[0, 1], [0, 2], [2, 3], [0, 4]]
+            isel = irep-11
+            ixy = idx[isel]
+            ix = ixy[0]
+            iy = ixy[1]
+            lab = [r'$x$ ($\mu$m)',r'$x^\prime$ ($\mu$rad)',r'$y$ ($\mu$m)',r'$y^\prime$ ($\mu$rad)',r'$\Delta E/E$ ($10^{-6}$)']
+            tit = [r'$X$',r'$X^\prime$',r'$Y$',r'$Y^\prime$',r'$\Delta E/E$']
+            xlab = lab[ix]
+            ylab = lab[iy]
+            title = r'Phase Space Reconstruction for %s - %s' % (tit[ix], tit[iy])
+            xdist = 0
+            ydist = 0
+            for ivec in range(6):
+                xdist += self.data.jitsrc[ivec, :] * self.model.corR[ivec, ix]
+                ydist += self.data.jitsrc[ivec, :] * self.model.corR[ivec, iy]
+            fit=np.polyfit(xdist,ydist,1)
+            ytmp=ydist-xdist*fit[0]
+            xstd=np.std(xdist)
+            ystd=np.std(ydist)
+            zstd=np.std(ytmp)
+            gamma=self.data.energy[0]/0.511
+            emit = xstd*zstd*1e3*gamma
+            if isel == 0 or isel == 2:
+                title += r' (Jitter Emittance $\epsilon_n$ = %2.1f nm)' % emit
+            elif isel == 3:
+                title += r' (Energy Jitter $\Delta E/E$ = %3.3f %%)' % (ystd/10)
+            self.axes.scatter(xdist*1e3, ydist*1e3, s=0.5)
+
+        elif irep > 14 and irep < 14+nbpm:
+            haslegend = False
+            title = 'Measured Orbit at %s' % self.bpm[irep-15]
+            xlab =r'$x$ ($\mu$m)'
+            ylab =r'$y$ ($\mu$m)'
+            self.axes.scatter(self.data.datasave[:,irep-15]*1e3,self.data.datasave[:,irep-15+nbpm]*1e3,s=0.5)
         else:
             return
-        self.axes.legend()
+        if haslegend:
+            self.axes.legend()
         self.axes.set_xlabel(xlab)
         self.axes.set_ylabel(ylab)
         self.axes.set_title(title)

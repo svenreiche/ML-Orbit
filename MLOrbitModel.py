@@ -2,11 +2,12 @@ import sys
 
 import tempfile
 from os import chdir, system
-
+import matplotlib.pyplot as plt
 # search path for online model
 sys.path.append('/sf/bd/applications/OnlineModel/current')
 
 import numpy as np
+import scipy.optimize as sop
 import OMMadxLat
 import OMFacility
 
@@ -47,7 +48,37 @@ class OrbitModel:
  #               print(ele.Name,ele.k1)
         self.SF.forceEnergyAt('SARCL02.MBND100', energy * 1e6)
         self.trackModel(energy)
-        self.FODOModel()  # prepare matrices for the Fodo lattice
+ #       self.FODOModel()  # prepare matrices for the Fodo lattice
+
+    def fitEvec(self,evec,N):
+        Ne = evec.shape[1]
+        self.corR=np.zeros((Ne,5))
+        for i in range(Ne):
+            self.corR[i,:] = self.fitRMatrix(evec[:,i],N)
+
+    def fitRMatrix(self,evec,N):
+
+        Nbpm=len(self.s)
+        # prepare the eigenfunction
+        self.revec = evec
+        # initial guess
+        x0 = np.array([1,0,1,0,1])
+        x0[0] = self.revec[0]
+        x0[2] = self.revec[Nbpm]
+        x0[4] = -np.max(np.abs(self.revec))/np.max(np.abs(self.r[:,4]))
+        res = sop.minimize(self.fitfun,x0,args=(N),method='Nelder-Mead',tol=0.01,options={'disp':False})
+        return res.x
+
+
+    def fitfun(self,x,N):
+
+        NBPM=len(self.s)
+        res = self.revec-x[0]*self.r[:,0]-x[4]*self.r[:,4]
+        for i in range(1, 4):
+            res -= x[i]*self.r[:,i]
+        res1 = np.sum(res[0:N]**2)
+        res2 = np.sum(res[NBPM:NBPM+N]**2)
+        return res1+res2
 
     def trackModel(self, energy):
         self.writeLattice(energy)
@@ -129,6 +160,9 @@ class OrbitModel:
                         res.append(np.array([float(x) for x in val[1:]]))
                         name.append(val[0][1:-1])
         return np.array(res), name
+
+
+# not needed any more
 
     def FODOModel(self):
         Lcell = 9.1
